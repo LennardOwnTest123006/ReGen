@@ -10,17 +10,28 @@
   var taps = [];
   MG.attach = function (canvas) {
     /* bound to the window because the touch layer covers the canvas */
-    window.addEventListener('pointerdown', function (e) {
+    function record(target, clientX, clientY) {
       if (document.body.classList.contains('modal')) return;
-      if (RG.Input.isUITarget && RG.Input.isUITarget(e.target)) return;
+      if (RG.Input.isUITarget && RG.Input.isUITarget(target)) return;
       var rect = canvas.getBoundingClientRect();
       taps.push({
-        x: (e.clientX - rect.left) / V.scale,
-        y: (e.clientY - rect.top) / V.scale,
+        x: (clientX - rect.left) / V.scale,
+        y: (clientY - rect.top) / V.scale,
         used: false
       });
       if (taps.length > 8) taps.shift();
-    });
+    }
+    if (typeof window.PointerEvent === 'function') {
+      window.addEventListener('pointerdown', function (e) {
+        record(e.target, e.clientX, e.clientY);
+      });
+    } else {
+      window.addEventListener('mousedown', function (e) { record(e.target, e.clientX, e.clientY); });
+      window.addEventListener('touchstart', function (e) {
+        var t = e.changedTouches[0];
+        if (t) record(e.target, t.clientX, t.clientY);
+      }, { passive: true });
+    }
   };
   function consumeTaps() { var t = taps.slice(); taps.length = 0; return t; }
   function clearTaps() { taps.length = 0; }

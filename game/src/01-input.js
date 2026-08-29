@@ -154,11 +154,15 @@
   }
   function stickEnd(stick) { stick.id = -1; stick.active = false; stick.x = 0; stick.y = 0; }
 
+  var HAS_POINTER = typeof window.PointerEvent === 'function';
+
   Input.attachTouchButton = function (el, action) {
     if (!el) return;
     function down(e) {
       e.preventDefault(); e.stopPropagation();
-      try { el.setPointerCapture(e.pointerId); } catch (err) { /* capture is best-effort */ }
+      if (e.pointerId !== undefined) {
+        try { el.setPointerCapture(e.pointerId); } catch (err) { /* best-effort */ }
+      }
       Input._touch[action] = true;
       Input._pulse[action] = true;
       Input.device = 'touch';
@@ -169,10 +173,17 @@
       Input._touch[action] = false;
       el.classList.remove('held');
     }
-    el.addEventListener('pointerdown', down, { passive: false });
-    el.addEventListener('pointerup', up, { passive: false });
-    el.addEventListener('pointercancel', up, { passive: false });
-    el.addEventListener('lostpointercapture', up, { passive: false });
+    if (HAS_POINTER) {
+      el.addEventListener('pointerdown', down, { passive: false });
+      el.addEventListener('pointerup', up, { passive: false });
+      el.addEventListener('pointercancel', up, { passive: false });
+      el.addEventListener('lostpointercapture', up, { passive: false });
+    } else {
+      /* WebViews older than Chrome 55 have no Pointer Events */
+      el.addEventListener('touchstart', down, { passive: false });
+      el.addEventListener('touchend', up, { passive: false });
+      el.addEventListener('touchcancel', up, { passive: false });
+    }
     el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   };
 
@@ -220,26 +231,59 @@
     });
 
     if (touchLayer) {
-      touchLayer.addEventListener('pointerdown', function (e) {
-        if (e.pointerType === 'mouse') return;
+      /* One begin/move/end trio, fed either by Pointer Events or, on older
+       * WebViews that lack them, by Touch Events. */
+      function begin(id, x, y) {
         Input.device = 'touch';
         var half = touchLayer.clientWidth * 0.5;
-        if (e.clientX < half) { if (!Input._stickMove.active) stickBegin(Input._stickMove, e.pointerId, e.clientX, e.clientY); }
-        else if (!Input._stickAim.active) stickBegin(Input._stickAim, e.pointerId, e.clientX, e.clientY);
-        e.preventDefault();
-      }, { passive: false });
-      touchLayer.addEventListener('pointermove', function (e) {
-        if (e.pointerType === 'mouse') return;
-        if (e.pointerId === Input._stickMove.id) stickMove(Input._stickMove, e.clientX, e.clientY);
-        else if (e.pointerId === Input._stickAim.id) stickMove(Input._stickAim, e.clientX, e.clientY);
-        e.preventDefault();
-      }, { passive: false });
-      var endPointer = function (e) {
-        if (e.pointerId === Input._stickMove.id) stickEnd(Input._stickMove);
-        else if (e.pointerId === Input._stickAim.id) stickEnd(Input._stickAim);
-      };
-      touchLayer.addEventListener('pointerup', endPointer, { passive: false });
-      touchLayer.addEventListener('pointercancel', endPointer, { passive: false });
+        if (x < half) { if (!Input._stickMove.active) stickBegin(Input._stickMove, id, x, y); }
+        else if (!Input._stickAim.active) stickBegin(Input._stickAim, id, x, y);
+      }
+      function move(id, x, y) {
+        if (id === Input._stickMove.id) stickMove(Input._stickMove, x, y);
+        else if (id === Input._stickAim.id) stickMove(Input._stickAim, x, y);
+      }
+      function end(id) {
+        if (id === Input._stickMove.id) stickEnd(Input._stickMove);
+        else if (id === Input._stickAim.id) stickEnd(Input._stickAim);
+      }
+
+      if (HAS_POINTER) {
+        touchLayer.addEventListener('pointerdown', function (e) {
+          if (e.pointerType === 'mouse') return;
+          begin(e.pointerId, e.clientX, e.clientY);
+          e.preventDefault();
+        }, { passive: false });
+        touchLayer.addEventListener('pointermove', function (e) {
+          if (e.pointerType === 'mouse') return;
+          move(e.pointerId, e.clientX, e.clientY);
+          e.preventDefault();
+        }, { passive: false });
+        var endPointer = function (e) { end(e.pointerId); };
+        touchLayer.addEventListener('pointerup', endPointer, { passive: false });
+        touchLayer.addEventListener('pointercancel', endPointer, { passive: false });
+      } else {
+        touchLayer.addEventListener('touchstart', function (e) {
+          for (var i = 0; i < e.changedTouches.length; i++) {
+            var t = e.changedTouches[i];
+            begin(t.identifier, t.clientX, t.clientY);
+          }
+          e.preventDefault();
+        }, { passive: false });
+        touchLayer.addEventListener('touchmove', function (e) {
+          for (var i = 0; i < e.changedTouches.length; i++) {
+            var t = e.changedTouches[i];
+            move(t.identifier, t.clientX, t.clientY);
+          }
+          e.preventDefault();
+        }, { passive: false });
+        var endTouch = function (e) {
+          for (var i = 0; i < e.changedTouches.length; i++) end(e.changedTouches[i].identifier);
+          e.preventDefault();
+        };
+        touchLayer.addEventListener('touchend', endTouch, { passive: false });
+        touchLayer.addEventListener('touchcancel', endTouch, { passive: false });
+      }
       touchLayer.addEventListener('contextmenu', function (e) { e.preventDefault(); });
     }
 

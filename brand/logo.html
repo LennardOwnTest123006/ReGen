@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  html,body{margin:0;padding:0;background:transparent;}
+  .stage{position:absolute;top:0;left:0;}
+  #mark{width:512px;height:512px;}
+  #markFlat{width:512px;height:512px;}
+  #wordmark{width:1600px;height:480px;}
+  #banner{width:1200px;height:680px;}
+  #sidebar{width:164px;height:314px;}
+  #header{width:150px;height:57px;}
+</style></head>
+<body>
+
+<!-- ============ app icon: a broken ring closing itself around an R ======= -->
+<div class="stage" id="mark">
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b2a5e"/>
+      <stop offset="0.55" stop-color="#101a3c"/>
+      <stop offset="1" stop-color="#0a0f24"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#7fffd4"/>
+      <stop offset="0.45" stop-color="#7fe0ff"/>
+      <stop offset="1" stop-color="#c08aff"/>
+    </linearGradient>
+    <linearGradient id="letter" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#bfe6ff"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.42" r="0.62">
+      <stop offset="0" stop-color="#4fd8ff" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#4fd8ff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+  </defs>
+
+  <rect x="26" y="26" width="460" height="460" rx="108" fill="url(#bg)"/>
+  <rect x="26" y="26" width="460" height="460" rx="108" fill="url(#glow)"/>
+  <rect x="30" y="30" width="452" height="452" rx="104" fill="none"
+        stroke="rgba(150,210,255,0.20)" stroke-width="4"/>
+
+  <!-- glow pass behind the ring -->
+  <g filter="url(#soft)" opacity="0.75">
+    <path d="M 256 92 A 164 164 0 1 1 140 140" fill="none" stroke="url(#ring)"
+          stroke-width="30" stroke-linecap="round"/>
+  </g>
+  <!-- the regeneration ring: open at the top, growing back clockwise -->
+  <path d="M 256 92 A 164 164 0 1 1 140 140" fill="none" stroke="url(#ring)"
+        stroke-width="30" stroke-linecap="round"/>
+  <!-- the growing tip -->
+  <path d="M 256 62 L 300 92 L 256 122 Z" fill="#7fffd4"/>
+  <circle cx="140" cy="140" r="17" fill="#c08aff"/>
+
+  <!-- R -->
+  <g transform="translate(256 268)">
+    <path d="M -62 -84 L -62 84 L -26 84 L -26 16 L 6 16 L 52 84 L 96 84
+             L 44 8 C 74 -4 88 -26 88 -56 C 88 -92 62 -114 16 -114 L -62 -114 Z
+             M -26 -82 L 12 -82 C 38 -82 51 -71 51 -52 C 51 -33 38 -21 12 -21
+             L -26 -21 Z"
+          fill="url(#letter)" transform="translate(0 14)"/>
+  </g>
+  <circle cx="366" cy="150" r="9" fill="#ffffff" opacity="0.9"/>
+  <circle cx="392" cy="122" r="5" fill="#7fffd4" opacity="0.8"/>
+</svg>
+</div>
+
+<!-- ============ flat variant for small sizes (16-48px) ================= -->
+<div class="stage" id="markFlat" style="display:none">
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1e2f66"/><stop offset="1" stop-color="#0b1129"/>
+    </linearGradient>
+    <linearGradient id="ring2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7fffd4"/><stop offset="1" stop-color="#8ab8ff"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="496" height="496" rx="112" fill="url(#bg2)"/>
+  <path d="M 256 76 A 180 180 0 1 1 128 128" fill="none" stroke="url(#ring2)"
+        stroke-width="42" stroke-linecap="round"/>
+  <path d="M 256 34 L 316 76 L 256 118 Z" fill="#7fffd4"/>
+  <g transform="translate(256 272)">
+    <path d="M -58 -78 L -58 78 L -14 78 L -14 22 L 4 22 L 46 78 L 98 78
+             L 48 12 C 76 -2 90 -26 90 -54 C 90 -92 62 -112 16 -112 L -58 -112 Z
+             M -14 -76 L 10 -76 C 34 -76 46 -66 46 -48 C 46 -30 34 -20 10 -20
+             L -14 -20 Z"
+          fill="#ffffff"/>
+  </g>
+</svg>
+</div>
+
+<!-- ============ wordmark for the title screen ========================== -->
+<div class="stage" id="wordmark" style="display:none">
+<svg viewBox="0 0 1600 480" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="wg" x1="0" y1="0" x2="1" y2="0.6">
+      <stop offset="0" stop-color="#7fffd4"/>
+      <stop offset="0.42" stop-color="#7fe0ff"/>
+      <stop offset="1" stop-color="#c08aff"/>
+    </linearGradient>
+    <filter id="wglow" x="-20%" y="-40%" width="140%" height="200%">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+  </defs>
+  <g filter="url(#wglow)" opacity="0.55">
+    <text x="800" y="268" text-anchor="middle" font-family="Segoe UI, system-ui, sans-serif"
+          font-size="230" font-weight="900" fill="url(#wg)">ReGen</text>
+  </g>
+  <text x="800" y="268" text-anchor="middle" font-family="Segoe UI, system-ui, sans-serif"
+        font-size="230" font-weight="900" fill="none" stroke="#080d1e" stroke-width="26"
+        stroke-linejoin="round">ReGen</text>
+  <text x="800" y="268" text-anchor="middle" font-family="Segoe UI, system-ui, sans-serif"
+        font-size="230" font-weight="900" fill="url(#wg)">ReGen</text>
+  <text x="800" y="356" text-anchor="middle" font-family="Segoe UI, system-ui, sans-serif"
+        font-size="44" font-weight="600" letter-spacing="15" fill="rgba(190,215,255,0.72)">A WORLD WORTH REBUILDING</text>
+</svg>
+</div>
+
+<!-- ============ installer sidebar (164x314) ============================ -->
+<div class="stage" id="sidebar" style="display:none">
+<svg viewBox="0 0 164 314" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sg" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#1d2c60"/><stop offset="0.6" stop-color="#111a3e"/>
+      <stop offset="1" stop-color="#080d1e"/>
+    </linearGradient>
+    <linearGradient id="sr" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7fffd4"/><stop offset="1" stop-color="#c08aff"/>
+    </linearGradient>
+  </defs>
+  <rect width="164" height="314" fill="url(#sg)"/>
+  <circle cx="82" cy="120" r="74" fill="none" stroke="rgba(127,224,255,0.10)" stroke-width="18"/>
+  <path d="M 82 62 A 58 58 0 1 1 41 82" fill="none" stroke="url(#sr)" stroke-width="13" stroke-linecap="round"/>
+  <path d="M 82 48 L 103 62 L 82 76 Z" fill="#7fffd4"/>
+  <text x="82" y="132" text-anchor="middle" font-family="Segoe UI, system-ui, sans-serif"
+        font-size="58" font-weight="900" fill="#ffffff">R</text>
+  <text x="82" y="228" text-anchor="middle" font-family="Segoe UI, system-ui, sans-serif"
+        font-size="34" font-weight="900" fill="#ffffff">ReGen</text>
+  <text x="82" y="252" text-anchor="middle" font-family="Segoe UI, system-ui, sans-serif"
+        font-size="10" font-weight="600" letter-spacing="2.2" fill="rgba(180,208,255,0.7)">REBUILD THE WORLD</text>
+  <rect x="34" y="268" width="96" height="2" fill="rgba(127,224,255,0.28)"/>
+</svg>
+</div>
+
+<!-- ============ installer header (150x57) ============================== -->
+<div class="stage" id="header" style="display:none">
+<svg viewBox="0 0 150 57" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="hr" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7fffd4"/><stop offset="1" stop-color="#c08aff"/>
+    </linearGradient>
+  </defs>
+  <rect width="150" height="57" fill="#ffffff"/>
+  <g transform="translate(112 28.5)">
+    <circle r="22" fill="#101a3c"/>
+    <path d="M 0 -15 A 15 15 0 1 1 -10.6 -10.6" fill="none" stroke="url(#hr)" stroke-width="5" stroke-linecap="round"/>
+    <path d="M 0 -19.5 L 5.5 -15 L 0 -10.5 Z" fill="#7fffd4"/>
+    <text y="8" text-anchor="middle" font-family="Segoe UI, system-ui, sans-serif"
+          font-size="17" font-weight="900" fill="#ffffff">R</text>
+  </g>
+  <text x="16" y="35" font-family="Segoe UI, system-ui, sans-serif"
+        font-size="21" font-weight="800" fill="#16214a">ReGen</text>
+</svg>
+</div>
+
+<!-- ============ store / social banner ================================== -->
+<div class="stage" id="banner" style="display:none">
+<svg viewBox="0 0 1200 680" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bgb" cx="0.5" cy="0.35" r="0.8">
+      <stop offset="0" stop-color="#1e3070"/><stop offset="0.6" stop-color="#101a3c"/>
+      <stop offset="1" stop-color="#070b1a"/>
+    </radialGradient>
+    <linearGradient id="bw" x1="0" y1="0" x2="1" y2="0.5">
+      <stop offset="0" stop-color="#7fffd4"/><stop offset="0.45" stop-color="#7fe0ff"/>
+      <stop offset="1" stop-color="#c08aff"/>
+    </linearGradient>
+    <filter id="bglow" x="-25%" y="-40%" width="150%" height="200%">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="680" fill="url(#bgb)"/>
+  <g opacity="0.14">
+    <circle cx="600" cy="300" r="250" fill="none" stroke="#7fe0ff" stroke-width="2"/>
+    <circle cx="600" cy="300" r="330" fill="none" stroke="#7fe0ff" stroke-width="1.4"/>
+    <circle cx="600" cy="300" r="410" fill="none" stroke="#7fe0ff" stroke-width="1"/>
+  </g>
+  <g transform="translate(600 250)">
+    <g filter="url(#bglow)" opacity="0.5">
+      <path d="M 0 -120 A 120 120 0 1 1 -85 -85" fill="none" stroke="url(#bw)" stroke-width="24" stroke-linecap="round"/>
+    </g>
+    <path d="M 0 -120 A 120 120 0 1 1 -85 -85" fill="none" stroke="url(#bw)" stroke-width="24" stroke-linecap="round"/>
+    <path d="M 0 -152 L 34 -120 L 0 -88 Z" fill="#7fffd4"/>
+    <text y="42" text-anchor="middle" font-family="Segoe UI, system-ui, sans-serif"
+          font-size="150" font-weight="900" fill="#ffffff">R</text>
+  </g>
+  <g filter="url(#bglow)" opacity="0.45">
+    <text x="600" y="520" text-anchor="middle" font-family="Segoe UI, system-ui, sans-serif"
+          font-size="120" font-weight="900" fill="url(#bw)">ReGen</text>
+  </g>
+  <text x="600" y="520" text-anchor="middle" font-family="Segoe UI, system-ui, sans-serif"
+        font-size="120" font-weight="900" fill="url(#bw)">ReGen</text>
+  <text x="600" y="576" text-anchor="middle" font-family="Segoe UI, system-ui, sans-serif"
+        font-size="26" font-weight="600" letter-spacing="9" fill="rgba(190,215,255,0.75)">A WORLD WORTH REBUILDING</text>
+</svg>
+</div>
+
+</body></html>
