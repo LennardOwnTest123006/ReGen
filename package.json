@@ -58,7 +58,10 @@
       ],
       "icon": "build/icon.png",
       "category": "Game"
-    }
+    },
+    "electronLanguages": [
+      "en-US"
+    ]
   },
   "repository": {
     "type": "git",

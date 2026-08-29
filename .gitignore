@@ -6,3 +6,5 @@ build/android/
 build/electron/
 *.log
 .DS_Store
+
+dist/split/
