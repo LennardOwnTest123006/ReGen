@@ -1,0 +1,8 @@
+node_modules/
+dist/
+build/shots/
+build/look/
+build/android/
+build/electron/
+*.log
+.DS_Store

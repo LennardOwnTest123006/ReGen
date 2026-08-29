@@ -1,0 +1,23 @@
+{
+  "name": "regen",
+  "productName": "ReGen",
+  "version": "1.0.0",
+  "description": "ReGen - a single-player 2D action-adventure: explore living worlds, raid dungeons, play mini-games and collect skins.",
+  "author": {
+    "name": "ReGen Studio",
+    "email": "lennardpahl30@gmail.com"
+  },
+  "license": "MIT",
+  "main": "electron/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "logo": "node tools/render-logo.mjs",
+    "test": "node tools/smoke-test.mjs",
+    "dist:win": "electron-builder --win --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "33.4.11",
+    "electron-builder": "26.0.12"
+  }
+}

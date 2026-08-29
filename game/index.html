@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0d18">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="ReGen - a single-player 2D action-adventure. Explore four worlds, raid dungeons, play mini-games and collect skins.">
+<title>ReGen</title>
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+  <canvas id="game" width="960" height="540"></canvas>
+  <div id="touchLayer"></div>
+  <div id="hud"></div>
+  <div id="touchControls"></div>
+  <div id="screens"></div>
+  <div id="toasts"></div>
+  <div id="rotate">
+    <div class="rot-inner">
+      <div class="rot-icon"></div>
+      <h2>Turn your device</h2>
+      <p>ReGen plays in landscape.</p>
+    </div>
+  </div>
+</div>
+
+<div id="splash">
+  <div class="splash-inner">
+    <div class="splash-mark"></div>
+    <div class="splash-name">ReGen</div>
+    <div class="splash-bar"><span></span></div>
+  </div>
+</div>
+
+<div id="fatal">
+  <div class="fatal-inner">
+    <h2>ReGen could not start</h2>
+    <p>Your browser or device blocked something the game needs.</p>
+    <pre id="fatal-detail"></pre>
+  </div>
+</div>
+
+<script src="src/00-core.js"></script>
+<script src="src/01-input.js"></script>
+<script src="src/02-audio.js"></script>
+<script src="src/03-render.js"></script>
+<script src="src/04-art.js"></script>
+<script src="src/05-art-entities.js"></script>
+<script src="src/06-data.js"></script>
+<script src="src/07-world.js"></script>
+<script src="src/08-dungeon.js"></script>
+<script src="src/09-entities.js"></script>
+<script src="src/10-save.js"></script>
+<script src="src/11-ui.js"></script>
+<script src="src/12-minigames.js"></script>
+<script src="src/13-game.js"></script>
+<script src="src/14-boot.js"></script>
+</body>
+</html>
