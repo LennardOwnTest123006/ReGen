@@ -166,5 +166,16 @@ step('Verifying the package');
 console.log(sh('python3', [path.join(toolsDir, 'verify.py'), signed])
   .split('\n').filter(Boolean).map(l => '   ' + l).join('\n'));
 
+/* Second opinion from an unrelated parser: the encoders here and verify.py
+   share assumptions, an outside implementation does not. */
+step('Reading it back with an independent parser');
+const checkDir = path.join(outDir, 'check');
+fs.mkdirSync(checkDir, { recursive: true });
+const parserJar = path.join(libDir, 'apk-parser-2.6.10.jar');
+ensure(parserJar, 'https://repo1.maven.org/maven2/net/dongliu/apk-parser/2.6.10/apk-parser-2.6.10.jar', 'apk-parser');
+sh('javac', ['-nowarn', '-cp', parserJar, '-d', checkDir, path.join(toolsDir, 'ApkCheck.java')]);
+console.log(sh('java', ['-cp', checkDir + ':' + parserJar, 'ApkCheck', signed])
+  .split('\n').filter(Boolean).map(l => '   ' + l).join('\n'));
+
 const size = fs.statSync(signed).size;
 console.log('\nReGen.apk -> ' + signed + '  (' + (size / 1048576).toFixed(2) + ' MB)');
