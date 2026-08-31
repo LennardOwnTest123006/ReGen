@@ -62,6 +62,7 @@
     this.player = new RG.Player();
     RG.makePools(this);
     UI.init(this);
+    UI.refreshHotbar();
     this.updateTouchMode();
     V.onResize = this.onResize.bind(this);
 
@@ -169,13 +170,22 @@
       if (RG.Input.justPressed('pause')) { this.pause(); RG.Input.consume('pause'); }
       else if (RG.Input.justPressed('map')) { UI.open('map'); RG.Input.consume('map'); }
       else if (RG.Input.justPressed('inventory')) { UI.open('vault'); RG.Input.consume('inventory'); }
+      else {
+        for (var hb = 0; hb < Data.HOTBAR.length; hb++) {
+          var slotAction = 'slot' + Data.HOTBAR[hb].slot;
+          if (RG.Input.justPressed(slotAction)) {
+            RG.Input.consume(slotAction);
+            this.useItem(Data.HOTBAR[hb].id);
+            break;
+          }
+        }
+      }
     } else if (UI.isOpen() && !UI.dialogOpen()) {
       if (RG.Input.justPressed('cancel')) { RG.Input.consume('cancel'); UI.back(); }
     }
 
     this.fade = M.damp(this.fade, this.fadeTarget, 9, dt);
     if (this.hitFlash > 0) this.hitFlash = Math.max(0, this.hitFlash - dt * 2.2);
-    if (this.luckBoostT > 0) this.luckBoostT -= dt;
 
     if (this.state === 'minigame') {
       if (!UI.isOpen()) {
@@ -189,6 +199,10 @@
     if (this.state !== 'play') { P.update(dt); FT.update(dt); return; }
     if (UI.isOpen() || UI.dialogOpen()) { this.paused = true; return; }
     this.paused = false;
+
+    /* only counted down while actually playing: a lure must not expire behind
+     * the pause menu or the store */
+    if (this.luckBoostT > 0) this.luckBoostT = Math.max(0, this.luckBoostT - dt);
 
     this.save.playtime += dt;
     this._saveTimer += dt;
@@ -358,6 +372,7 @@
       /* landmark discovery */
       if (s.kind === 'shrine' && !s.found && d < 200 * 200) {
         s.found = true;
+        this.markStructureFound(s);
         this.discover(s.name);
       }
       /* ambient light from portals and shrines */
@@ -375,13 +390,13 @@
   Game.prototype.interact = function (s) {
     var self = this;
     switch (s.kind) {
-      case 'shop': UI.open('store'); break;
+      case 'shop': UI.openStore('consumable'); break;
       case 'vault': UI.open('vault'); break;
       case 'quests': UI.open('quests'); break;
       case 'stats': UI.open('records'); break;
       case 'arcade': UI.open('arcade'); break;
       case 'forge':
-        UI.open('store');
+        UI.openStore('upgrade');
         break;
       case 'save':
         this.player.heal(this.player.maxHp, false);
@@ -430,6 +445,7 @@
   Game.prototype.openChest = function (s) {
     if (s.used) { this.toast('Already emptied.', 'bad'); RG.Audio.play('error'); return; }
     s.used = true;
+    this.markStructureUsed(s);
     this.save.stats.chests++;
     this.bumpQuest('chest', 1);
     RG.Audio.play('unlock');
@@ -458,6 +474,7 @@
   Game.prototype.useShrine = function (s) {
     if (s.used) { this.toast('This shrine is spent.', 'bad'); RG.Audio.play('error'); return; }
     s.used = true;
+    this.markStructureUsed(s);
     RG.Audio.play('levelup');
     P.ring(s.x, s.y - 16, 120, 'rgba(127,224,255,0.9)', 0.8, 5);
     P.burst(s.x, s.y - 16, 34, '#7fe0ff', { speed: 160, life: 1, size: 3.4, glow: 1 });
@@ -486,7 +503,8 @@
   };
 
   Game.prototype.startBoss = function (s) {
-    if (s.used) { this.toast('Already defeated.', 'bad'); return; }
+    if (s.used === true) { this.toast('You have already beaten this one.', 'bad'); return; }
+    if (s.used === 'fighting') { this.toast('It is already awake - find it.', 'warn', 'skull'); return; }
     var self = this;
     UI.confirm('Challenge ' + s.name + '?', 'This fight does not stop until one of you does.', function () {
       s.used = 'fighting';
@@ -553,51 +571,165 @@
   Game.prototype.buy = function (it, price) {
     var s = this.save;
     var cur = it.cur === 'gems' ? 'gems' : 'coins';
+
+    /* Validate everything before a single field is mutated, so a rejected
+     * purchase can never leave the profile half-changed. */
     if (s[cur] < price) {
       RG.Audio.play('error');
-      this.toast('Not enough ' + cur + '.', 'bad');
-      return;
-    }
-    if (it.cat === 'consumable') {
-      var have = s.inventory[it.id] || 0;
-      if (have >= it.stack) { RG.Audio.play('error'); this.toast('You cannot carry more.', 'bad'); return; }
-      s.inventory[it.id] = have + 1;
+      this.toast('Not enough ' + cur + ' - you need ' + RG.fmt(price - s[cur]) + ' more.', 'bad',
+        cur === 'gems' ? 'gem' : 'coin');
+      return false;
     }
     var bought = s.purchases[it.id] || 0;
-    if (it.repeat !== undefined && bought >= it.repeat) { RG.Audio.play('error'); return; }
+    if (it.repeat !== undefined && bought >= it.repeat) {
+      RG.Audio.play('error');
+      this.toast(it.name + ' is already fully upgraded.', 'bad');
+      return false;
+    }
+    var carrying = s.inventory[it.id] || 0;
+    if (it.cat === 'consumable' && !it.instant && carrying >= it.stack) {
+      RG.Audio.play('error');
+      this.toast('You are already carrying ' + it.stack + ' ' + it.name + '. Use one first.', 'bad', it.icon);
+      return false;
+    }
 
     s[cur] -= price;
     s.purchases[it.id] = bought + 1;
     RG.Audio.play('buy');
 
     var eff = it.effect || {};
-    if (eff.upHp) { s.upgrades.hp += eff.upHp; }
-    if (eff.upDmg) { s.upgrades.dmg += eff.upDmg; }
-    if (eff.upSpd) { s.upgrades.spd += eff.upSpd; }
-    if (eff.upLuck) { s.upgrades.luck += eff.upLuck; }
-    if (eff.upCrit) { s.upgrades.crit += eff.upCrit; }
+    if (eff.upHp) s.upgrades.hp += eff.upHp;
+    if (eff.upDmg) s.upgrades.dmg += eff.upDmg;
+    if (eff.upSpd) s.upgrades.spd += eff.upSpd;
+    if (eff.upLuck) s.upgrades.luck += eff.upLuck;
+    if (eff.upCrit) s.upgrades.crit += eff.upCrit;
     if (eff.gems) { s.gems += eff.gems; s.stats.gemsEarned += eff.gems; }
-    if (eff.key) { s.keys += eff.key; }
 
     if (it.chest) {
-      var rar = this.pickRarity(it.chest);
-      var skin = this.grantRandomSkin([rar]);
-      var lines = [];
-      var bonus = Math.round(it.price * 0.25);
-      this.gainCoins(bonus);
-      lines.push({ icon: 'coin', text: '+' + RG.fmt(bonus) + ' coins' });
-      if (it.chest.gems) { s.gems += it.chest.gems; lines.push({ icon: 'gem', text: '+' + it.chest.gems + ' gems' }); }
-      if (!skin) lines.push({ icon: 'star', text: 'Every skin in this cache is already yours - the coins were doubled.' });
-      if (!skin) this.gainCoins(bonus);
-      UI.showReward(it.name, lines, skin);
+      this.openCache(it);
+    } else if (it.cat === 'consumable') {
+      if (it.instant) {
+        /* a resource, not something you drink: it lands where it is used */
+        if (eff.key) {
+          s.keys += eff.key;
+          this.toast('Rift Key added - you now carry ' + s.keys + '.', 'good', 'key');
+        }
+      } else {
+        s.inventory[it.id] = carrying + 1;
+        /* Use it right now if it would actually do something; otherwise it
+         * waits on the quick bar rather than silently vanishing. */
+        if (this.canUseItem(it.id)) {
+          this.useItem(it.id);
+        } else {
+          this.toast(it.name + ' is in your bag (' + s.inventory[it.id] + '). ' + this.slotHint(it), 'good', it.icon);
+        }
+      }
     } else {
       this.player.recompute(this);
-      this.toast('Purchased ' + it.name, 'good', it.icon);
+      this.toast(it.name + ' - ' + it.desc, 'good', it.icon);
     }
+
     this.checkAchievements();
     UI.refresh_store();
     UI.refreshWallets();
+    UI.refreshHotbar();
     this.queueSave();
+    return true;
+  };
+
+  /* Wording that matches how the player is actually holding the game. */
+  Game.prototype.slotHint = function (it) {
+    if (!it.slot) return '';
+    return RG.Input.device === 'touch'
+      ? 'Tap it on the item bar to use it.'
+      : 'Press ' + it.slot + ' to use it.';
+  };
+
+  /* Would using this item right now accomplish anything? */
+  Game.prototype.canUseItem = function (id) {
+    var it = Data.shopItem(id);
+    if (!it || !it.effect || it.instant) return false;
+    if ((this.save.inventory[id] || 0) <= 0) return false;
+    var p = this.player;
+    if (!p || p.dead || this.state !== 'play') return false;
+    var e = it.effect;
+    if (e.heal) return p.hp < p.maxHp - 0.5;
+    if (e.shield) return p.shield < e.shield;
+    if (e.luckBoost) return this.luckBoostT < e.luckBoost * 0.5;
+    return true;
+  };
+
+  /* Consumes one of the item and applies it. Returns whether anything
+   * happened, so callers never have to guess. */
+  Game.prototype.useItem = function (id) {
+    var it = Data.shopItem(id);
+    var s = this.save;
+    if (!it || !it.effect) return false;
+    if ((s.inventory[id] || 0) <= 0) {
+      RG.Audio.play('error');
+      this.toast('You have no ' + (it ? it.name : 'item') + ' left.', 'bad');
+      return false;
+    }
+    if (!this.canUseItem(id)) {
+      RG.Audio.play('error');
+      var why = it.effect.heal ? 'Your health is already full.'
+        : (it.effect.shield ? 'Your ward is still holding.'
+          : 'That is already active.');
+      this.toast(why, 'bad', it.icon);
+      return false;
+    }
+
+    s.inventory[id] = s.inventory[id] - 1;
+    var p = this.player;
+    var e = it.effect;
+
+    if (e.heal) {
+      var before = p.hp;
+      p.heal(e.heal, false);
+      var gained = Math.round(p.hp - before);
+      RG.Audio.play('heal');
+      FT.add(p.x, p.y - 40, '+' + gained, '#4ad88a', 14, true);
+      P.burst(p.x, p.y - 12, 18, '#4ad88a', { speed: 110, life: 0.7, size: 3.2, glow: 1, kind: 5, vrot: 4 });
+      P.ring(p.x, p.y - 12, 46, 'rgba(74,216,138,0.85)', 0.5, 3);
+      this.toast(it.name + ' - restored ' + gained + ' health', 'good', 'heart');
+    } else if (e.shield) {
+      p.shield = e.shield;
+      RG.Audio.play('unlock');
+      P.ring(p.x, p.y - 12, 54, 'rgba(140,216,255,0.9)', 0.6, 4);
+      P.burst(p.x, p.y - 12, 16, '#8cd8ff', { speed: 100, life: 0.7, size: 3, glow: 1 });
+      this.toast(it.name + ' - absorbing the next ' + e.shield + ' damage', 'good', 'shield');
+    } else if (e.luckBoost) {
+      this.luckBoostT = e.luckBoost;
+      RG.Audio.play('gem');
+      P.burst(p.x, p.y - 12, 22, '#f5c542', { speed: 130, life: 0.8, size: 3.4, glow: 1, kind: 5, vrot: 5 });
+      this.toast(it.name + ' - double coins for ' + Math.round(e.luckBoost / 60) + ' minutes', 'good', 'star');
+    }
+
+    UI.refreshHotbar();
+    if (UI.currentName() === 'store') UI.refresh_store();
+    this.queueSave();
+    return true;
+  };
+
+  /* Split out of buy() so a cache opened from anywhere behaves the same. */
+  Game.prototype.openCache = function (it) {
+    var s = this.save;
+    var rar = this.pickRarity(it.chest);
+    var skin = this.grantRandomSkin([rar]);
+    var lines = [];
+    var bonus = Math.round(it.price * 0.25);
+    this.gainCoins(bonus);
+    lines.push({ icon: 'coin', text: '+' + RG.fmt(bonus) + ' coins' });
+    if (it.chest.gems) {
+      s.gems += it.chest.gems;
+      s.stats.gemsEarned += it.chest.gems;
+      lines.push({ icon: 'gem', text: '+' + it.chest.gems + ' gems' });
+    }
+    if (!skin) {
+      this.gainCoins(bonus);
+      lines.push({ icon: 'star', text: 'Every skin this cache can hold is already yours, so the coins were doubled.' });
+    }
+    UI.showReward(it.name, lines, skin);
   };
 
   Game.prototype.pickRarity = function (chest) {
@@ -703,6 +835,8 @@
     var s = this.save;
     if (ac.stat === 'level') return s.level;
     if (ac.stat === 'skinCount') return s.owned.length;
+    /* distinct world bosses, so farming dungeon guardians does not count */
+    if (ac.stat === 'worldBosses') return (s.stats.bossList || []).length;
     return s.stats[ac.stat] || 0;
   };
 
@@ -764,8 +898,39 @@
     if (sw && !sw.seed) { sw.seed = (Math.random() * 0xfffffff) | 0 || 12345; }
     var seed = id === 'hub' ? 1337 : (sw ? sw.seed : 999);
     var w = new RG.World(def, seed);
+    this.applyWorldProgress(w);
     this.worldCache[id] = w;
     return w;
+  };
+
+  /* A world is regenerated from its seed every session, so which caches were
+   * looted and which shrines were spent has to be replayed onto it - without
+   * this, restarting the game refills every chest on the map. */
+  Game.prototype.applyWorldProgress = function (w) {
+    var sw = this.save.worlds[w.id];
+    for (var i = 0; i < w.structures.length; i++) {
+      var st = w.structures[i];
+      st.sid = i;
+      if (!sw) continue;
+      if (sw.used && sw.used.indexOf(i) !== -1) st.used = true;
+      if (sw.found && sw.found.indexOf(i) !== -1) st.found = true;
+    }
+  };
+
+  Game.prototype.markStructureUsed = function (st) {
+    var sw = this.save.worlds[this.world.id];
+    /* dungeons and the arena are throwaway worlds; nothing to remember */
+    if (!sw || st.sid === undefined) return;
+    if (!sw.used) sw.used = [];
+    if (sw.used.indexOf(st.sid) === -1) sw.used.push(st.sid);
+    this.queueSave();
+  };
+
+  Game.prototype.markStructureFound = function (st) {
+    var sw = this.save.worlds[this.world.id];
+    if (!sw || st.sid === undefined) return;
+    if (!sw.found) sw.found = [];
+    if (sw.found.indexOf(st.sid) === -1) sw.found.push(st.sid);
   };
 
   Game.prototype.applyWorldLook = function () {
@@ -780,9 +945,12 @@
     var self = this;
     this.fadeTarget = 1;
     RG.Audio.play('portal');
+    this.recordArenaScore();
     setTimeout(function () {
       self.arena = null;
       self.dungeonCtx = null;
+      self.minigame = null;
+      document.body.classList.remove('minigame');
       self.clearEntities();
       self.world = self.getWorld(id);
       self.state = 'play';
@@ -801,6 +969,8 @@
   Game.prototype.enterDungeon = function (s) {
     var self = this;
     this.dungeonCtx = { from: this.world.id, tier: s.tier || 0, seed: s.seed || 1, floor: 1, maxFloor: 3, flawless: true };
+    /* a fresh descent starts clean, whatever happened on earlier runs */
+    this.player.noDamageRun = true;
     this.fadeTarget = 1;
     RG.Audio.play('door');
     setTimeout(function () { self.buildDungeonFloor(); }, 260);
@@ -863,7 +1033,18 @@
     this.queueSave();
   };
 
+  /* A boss the player fled from or died to must become challengeable again;
+   * otherwise the 'fighting' marker locks it out for the rest of the save. */
+  Game.prototype.releaseUnfinishedBosses = function () {
+    var list = this.world && this.world.structures;
+    if (!list) return;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].used === 'fighting') list[i].used = false;
+    }
+  };
+
   Game.prototype.clearEntities = function () {
+    this.releaseUnfinishedBosses();
     for (var i = 0; i < this.enemies.length; i++) this.enemies[i].alive = false;
     for (var j = 0; j < this.projectiles.length; j++) this.projectiles[j].alive = false;
     for (var k = 0; k < this.pickups.length; k++) this.pickups[k].alive = false;
@@ -880,10 +1061,17 @@
     s.stats.kills++;
     this.runStats.kills++;
     this.bumpQuest('kill', 1);
+    if (this.arena) this.arena.kills++;
     if (e.def.boss) {
       s.stats.bossesKilled++;
+      if (this.arena) {
+        /* an arena guardian is a wave, not a world boss: it must not touch
+         * world unlocks or pop a "world restored" screen mid-run */
+        this.checkAchievements();
+        return;
+      }
       this.bumpQuest('boss', 1, e.id);
-      if (e.structure) e.structure.used = true;
+      if (e.structure) { e.structure.used = true; this.markStructureUsed(e.structure); }
       if (e.id === 'boss_guardian' && this.world.def.kind === 'dungeon') {
         var self = this;
         setTimeout(function () { self.completeDungeon(); }, 1400);
@@ -917,6 +1105,7 @@
   Game.prototype.onPlayerDeath = function () {
     var s = this.save;
     s.stats.deaths++;
+    if (this.arena) this.recordArenaScore();
     var msgs = [
       'The Blight took this one. It does not get to keep it.',
       'You fall. The world keeps turning, which is the point.',
@@ -931,6 +1120,22 @@
     this.queueSave();
     var self = this;
     setTimeout(function () { UI.open('gameover'); }, 900);
+  };
+
+  /* The Blight Arena is scored on how far the run got. Recorded on every
+   * death so a revived run can only ever improve on it. */
+  Game.prototype.recordArenaScore = function () {
+    var a = this.arena;
+    if (!a) return 0;
+    var score = Math.max(0, (a.wave - 1)) * 260 + a.kills * 12;
+    a.score = score;
+    var s = this.save;
+    if (score > (s.best.arena || 0)) s.best.arena = score;
+    s.stats.miniScore = (s.stats.miniScore || 0) + score - (a.banked || 0);
+    a.banked = score;
+    this.checkAchievements();
+    this.queueSave();
+    return score;
   };
 
   Game.prototype.revive = function () {
@@ -967,6 +1172,9 @@
     if (!mg) return;
     this.minigame = mg;
     this.state = 'minigame';
+    /* the cabinets draw their own screen; the world HUD has no business
+     * sitting on top of them */
+    document.body.classList.add('minigame');
     P.clear(); FT.clear();
     mg.init(this);
     this.save.stats.minigamesPlayed = this.save.stats.minigamesPlayed || {};
@@ -980,7 +1188,7 @@
     setTimeout(function () {
       self.clearEntities();
       self.world = RG.makeArena((Math.random() * 1e9) | 0);
-      self.arena = { wave: 0, between: 2.4, done: false, startCoins: self.save.coins };
+      self.arena = { wave: 0, between: 2.4, done: false, kills: 0, startCoins: self.save.coins };
       self.state = 'play';
       self.player.reset(self, self.world.spawn.x, self.world.spawn.y);
       self.applyWorldLook();
@@ -1007,6 +1215,7 @@
     if (gems) { s.gems += gems; s.stats.gemsEarned += gems; }
     this.minigame = null;
     this.state = 'play';
+    document.body.classList.remove('minigame');
     P.clear(); FT.clear();
     RG.Audio.playMusic(this.world.def.music || 'hub');
     var lines = [
@@ -1043,6 +1252,7 @@
     this.worldCache = {};
     this.player = new RG.Player();
     UI.applySettings();
+    UI.refreshHotbar();
     this.startGame(true);
   };
 
@@ -1051,13 +1261,17 @@
     this.worldCache = {};
     this.player.recompute(this);
     UI.applySettings();
+    UI.refreshHotbar();
     RG.Save.flush(this.save);
     this.travelTo('hub', true);
   };
 
   Game.prototype.toTitle = function () {
+    this.recordArenaScore();
     RG.Save.flush(this.save);
     this.state = 'title';
+    this.minigame = null;
+    document.body.classList.remove('minigame');
     this.clearEntities();
     this.arena = null;
     this.dungeonCtx = null;
@@ -1180,7 +1394,8 @@
         var props = TP[id];
         if (props.liquid) {
           var off = Math.floor((Math.sin(t * 0.9 + tx * 0.3 + ty * 0.2) * 0.5 + 0.5) * 3.99) * px;
-          ctx.drawImage(img, off, id * px, px, px, tx * TS, ty * TS, TS + 0.75, TS + 0.75);
+          ctx.drawImage(img, off + 0.75, id * px + 0.75, px - 1.5, px - 1.5,
+            tx * TS, ty * TS, TS + 0.75, TS + 0.75);
         }
         if (props.glow && ((tx ^ ty) & 7) === 0) {
           L.add(tx * TS + TS * 0.5, ty * TS + TS * 0.5, 96, props.glow, 0.5);

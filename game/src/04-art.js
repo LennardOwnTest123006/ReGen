@@ -219,9 +219,15 @@
         /* nudge each variant's tone so a large field never bands */
         var shift = (v - (VARIANTS - 1) * 0.5) * 0.009;
         var vc = [C.shade(colors[0], shift), C.shade(colors[1], shift), C.shade(colors[2], shift)];
-        paintTile(ctx, v * TILE_PX, t * TILE_PX, vc, rng, style, v);
-        /* extras layered on top of the base tile */
         var ox = v * TILE_PX, oy = t * TILE_PX;
+        /* Confine every stroke to its own cell. The texture deliberately
+         * paints past the tile edge for an organic look, and unclipped that
+         * spilled into the neighbouring cell - a different tile entirely. */
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(ox, oy, TILE_PX, TILE_PX);
+        ctx.clip();
+        paintTile(ctx, ox, oy, vc, rng, style, v);
         if (t === T.FLOWERS) {
           var fc = ['#f0d060', '#e8708a', '#c890f0', '#f0f0f0'];
           for (var f = 0; f < 4; f++) {
@@ -264,6 +270,7 @@
           ctx.stroke();
           ctx.globalAlpha = 1;
         }
+        ctx.restore();
       }
     }
     atlasCache[biome] = { canvas: cv, px: TILE_PX, variants: VARIANTS };

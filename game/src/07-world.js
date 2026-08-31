@@ -618,7 +618,6 @@
   /* patterned tiles must keep their orientation or the courses stop lining up */
   var NO_FLIP = {};
   NO_FLIP[T.WALL] = 1; NO_FLIP[T.WOOD] = 1; NO_FLIP[T.BRIDGE] = 1;
-  NO_FLIP[T.MARBLE] = 1; NO_FLIP[T.CARPET] = 1;
 
   var CHUNK = 16;
   var CHUNK_PX = CHUNK * TS;
@@ -636,6 +635,9 @@
     var atlas = this.atlas, px = atlas.px, img = atlas.canvas;
     var size = this.size;
     var over = 0.75;
+    /* Sampling the outermost half-pixel of a cell lets bilinear filtering
+     * pull in the neighbouring cell, so the source rect is inset slightly. */
+    var IN = 0.75, INSET = px - IN * 2;
     ctx.fillStyle = '#000000';
     ctx.clearRect(0, 0, CHUNK_PX, CHUNK_PX);
     for (var ty = 0; ty < CHUNK; ty++) {
@@ -646,7 +648,8 @@
         if (id === T.VOID) continue;
         var v = this.decor[wy * size + wx] % atlas.variants;
         if (NO_FLIP[id]) {
-          ctx.drawImage(img, v * px, id * px, px, px, tx * TS, ty * TS, TS + over, TS + over);
+          ctx.drawImage(img, v * px + IN, id * px + IN, INSET, INSET,
+            tx * TS, ty * TS, TS + over, TS + over);
         } else {
           /* mirroring multiplies the apparent variety of the tile sheet by
            * four for the cost of a transform at bake time */
@@ -655,7 +658,7 @@
           ctx.save();
           ctx.translate(tx * TS + (fx < 0 ? TS + over : 0), ty * TS + (fy < 0 ? TS + over : 0));
           ctx.scale(fx, fy);
-          ctx.drawImage(img, v * px, id * px, px, px, 0, 0, TS + over, TS + over);
+          ctx.drawImage(img, v * px + IN, id * px + IN, INSET, INSET, 0, 0, TS + over, TS + over);
           ctx.restore();
         }
       }

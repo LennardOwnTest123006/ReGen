@@ -13,7 +13,8 @@
 (function (RG) {
   var M = RG.M;
 
-  var ACTIONS = ['attack', 'dash', 'ability', 'interact', 'map', 'inventory', 'pause', 'confirm', 'cancel'];
+  var ACTIONS = ['attack', 'dash', 'ability', 'interact', 'map', 'inventory', 'pause', 'confirm', 'cancel',
+    'slot1', 'slot2', 'slot3', 'slot4'];
 
   var KEYMAP = {
     KeyW: 'up', ArrowUp: 'up',
@@ -72,7 +73,12 @@
   function onKey(e, isDown) {
     if (e.repeat) return;
     var code = e.code, a = KEYMAP[code];
-    if (code.length === 6 && code.indexOf('Digit') === 0) Input._kb['slot' + code.charAt(5)] = isDown;
+    if (code.length === 6 && code.indexOf('Digit') === 0) {
+      var slot = 'slot' + code.charAt(5);
+      Input._kb[slot] = isDown;
+      if (isDown) Input._pulse[slot] = true;
+      Input.device = 'kbm';
+    }
     if (!a) return;
     Input.device = 'kbm';
     if (a === 'up' || a === 'down' || a === 'left' || a === 'right') {

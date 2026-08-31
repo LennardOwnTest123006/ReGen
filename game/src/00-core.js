@@ -31,12 +31,6 @@ var M = RG.M = {
     if (d > maxStep) d = maxStep; else if (d < -maxStep) d = -maxStep;
     return a + d;
   },
-  moveTowards: function (a, b, step) {
-    var d = b - a;
-    if (d > step) return a + step;
-    if (d < -step) return a - step;
-    return b;
-  },
   round: Math.round,
   floor: Math.floor,
   /* easings */
@@ -201,87 +195,7 @@ var C = RG.Color = {
   }
 };
 
-/* ------------------------------------------------------------------ pool */
-/* Generic object pool. Objects are never released to the GC, so long play
- * sessions do not accumulate collection pauses. */
-function Pool(factory, reset, size) {
-  this.factory = factory;
-  this.reset = reset;
-  this.items = [];
-  this.active = [];
-  for (var i = 0; i < (size || 0); i++) this.items.push(factory());
-}
-Pool.prototype.get = function () {
-  var o = this.items.length ? this.items.pop() : this.factory();
-  this.active.push(o);
-  return o;
-};
-Pool.prototype.releaseAt = function (i) {
-  var o = this.active[i];
-  this.active[i] = this.active[this.active.length - 1];
-  this.active.pop();
-  if (this.reset) this.reset(o);
-  this.items.push(o);
-};
-Pool.prototype.clear = function () {
-  while (this.active.length) this.releaseAt(this.active.length - 1);
-};
-RG.Pool = Pool;
-
-/* --------------------------------------------------------- spatial hash */
-/* Uniform grid for broad-phase queries. Rebuilt each frame from the active
- * entity list - O(n) build, O(1) average query. */
-function SpatialHash(cell) {
-  this.cell = cell || 64;
-  this.map = new Map();
-  this._scratch = [];
-}
-SpatialHash.prototype.clear = function () { this.map.clear(); };
-SpatialHash.prototype._key = function (cx, cy) { return cx * 73856093 ^ cy * 19349663; };
-SpatialHash.prototype.insert = function (e) {
-  var c = this.cell;
-  var x0 = Math.floor((e.x - e.r) / c), x1 = Math.floor((e.x + e.r) / c);
-  var y0 = Math.floor((e.y - e.r) / c), y1 = Math.floor((e.y + e.r) / c);
-  for (var y = y0; y <= y1; y++) {
-    for (var x = x0; x <= x1; x++) {
-      var k = this._key(x, y), b = this.map.get(k);
-      if (!b) { b = []; this.map.set(k, b); }
-      b.push(e);
-    }
-  }
-};
-/* returns a shared scratch array - consume before calling again */
-SpatialHash.prototype.query = function (x, y, r) {
-  var out = this._scratch; out.length = 0;
-  var c = this.cell;
-  var x0 = Math.floor((x - r) / c), x1 = Math.floor((x + r) / c);
-  var y0 = Math.floor((y - r) / c), y1 = Math.floor((y + r) / c);
-  for (var gy = y0; gy <= y1; gy++) {
-    for (var gx = x0; gx <= x1; gx++) {
-      var b = this.map.get(this._key(gx, gy));
-      if (!b) continue;
-      for (var i = 0; i < b.length; i++) {
-        var e = b[i];
-        if (out.indexOf(e) === -1) out.push(e);
-      }
-    }
-  }
-  return out;
-};
-RG.SpatialHash = SpatialHash;
-
 /* ----------------------------------------------------------------- misc */
-RG.Emitter = function () { this._h = {}; };
-RG.Emitter.prototype.on = function (ev, fn) { (this._h[ev] || (this._h[ev] = [])).push(fn); return fn; };
-RG.Emitter.prototype.off = function (ev, fn) {
-  var a = this._h[ev]; if (!a) return;
-  var i = a.indexOf(fn); if (i >= 0) a.splice(i, 1);
-};
-RG.Emitter.prototype.emit = function (ev, a, b, c) {
-  var h = this._h[ev]; if (!h) return;
-  for (var i = 0; i < h.length; i++) h[i](a, b, c);
-};
-
 RG.fmt = function (n) {
   n = Math.floor(n);
   if (n < 1000) return '' + n;

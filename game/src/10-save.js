@@ -42,10 +42,10 @@
       achievements: [],
       worlds: {
         hub: { unlocked: true },
-        verdant: { unlocked: true, boss: false, seed: 0, found: [] },
-        ember: { unlocked: false, boss: false, seed: 0, found: [] },
-        frost: { unlocked: false, boss: false, seed: 0, found: [] },
-        voidr: { unlocked: false, boss: false, seed: 0, found: [] }
+        verdant: { unlocked: true, boss: false, seed: 0, found: [], used: [] },
+        ember: { unlocked: false, boss: false, seed: 0, found: [], used: [] },
+        frost: { unlocked: false, boss: false, seed: 0, found: [], used: [] },
+        voidr: { unlocked: false, boss: false, seed: 0, found: [], used: [] }
       },
       best: {},
       settings: {

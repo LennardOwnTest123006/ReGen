@@ -69,7 +69,6 @@
     if (View.lightCanvas.width !== lw || View.lightCanvas.height !== lh) {
       View.lightCanvas.width = lw; View.lightCanvas.height = lh;
     }
-    RG.Emitter.prototype.emit.call(View._ev || (View._ev = new RG.Emitter()), 'resize');
     if (View.onResize) View.onResize();
   };
 
@@ -150,7 +149,11 @@
        * newest effect is always the one the player is looking at */
       var oldest = 0, ol = 1e9;
       for (var k = 0; k < P.count; k += 7) { if (P.list[k].life < ol) { ol = P.list[k].life; oldest = k; } }
+      /* swap, never overwrite: assigning one slot from another would leak the
+       * object that was there and leave two slots sharing one particle */
+      var swap = P.list[oldest];
       P.list[oldest] = P.list[P.count - 1];
+      P.list[P.count - 1] = swap;
       P.count--;
     }
     var p = P.list[P.count++];
@@ -277,7 +280,14 @@
     for (var i = 0; i < MAX_TEXT; i++) T.list[i] = { x: 0, y: 0, vy: 0, life: 0, max: 1, text: '', color: '#fff', size: 10, crit: false };
   })();
   T.add = function (x, y, text, color, size, crit) {
-    if (T.count >= MAX_TEXT) { T.list[0].life = 0; T.count--; T.list[0] = T.list[T.count]; }
+    if (T.count >= MAX_TEXT) {
+      /* drop the oldest entry by swapping it to the end of the live range,
+       * so no pooled object is ever lost */
+      T.count--;
+      var swap = T.list[0];
+      T.list[0] = T.list[T.count];
+      T.list[T.count] = swap;
+    }
     var o = T.list[T.count++];
     o.x = x + (Math.random() - 0.5) * 6; o.y = y; o.vy = -32 - Math.random() * 12;
     o.life = crit ? 1.1 : 0.8; o.max = o.life;

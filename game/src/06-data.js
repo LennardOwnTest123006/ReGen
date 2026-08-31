@@ -420,17 +420,22 @@
   };
 
   /* ------------------------------------------------------------- shop */
+  /* Consumables carry `slot` so they appear on the quick bar, and `instant`
+   * for the ones that are a resource rather than something you drink. */
   Data.SHOP = [
     { id: 'potion_s', name: 'Small Elixir', icon: 'potion', price: 60, cur: 'coins', cat: 'consumable',
-      desc: 'Restores 45 health instantly.', stack: 9, effect: { heal: 45 } },
+      desc: 'Restores 45 health. Drunk the moment you buy it if you are hurt.',
+      stack: 9, slot: 1, effect: { heal: 45 } },
     { id: 'potion_l', name: 'Greater Elixir', icon: 'potion', price: 170, cur: 'coins', cat: 'consumable',
-      desc: 'Restores 140 health instantly.', stack: 9, effect: { heal: 140 } },
+      desc: 'Restores 140 health. Drunk the moment you buy it if you are hurt.',
+      stack: 9, slot: 2, effect: { heal: 140 } },
     { id: 'ward', name: 'Aether Ward', icon: 'shield', price: 260, cur: 'coins', cat: 'consumable',
-      desc: 'Absorbs the next 120 damage you would take.', stack: 5, effect: { shield: 120 } },
-    { id: 'key', name: 'Rift Key', icon: 'key', price: 320, cur: 'coins', cat: 'consumable',
-      desc: 'Opens one sealed dungeon vault.', stack: 9, effect: { key: 1 } },
+      desc: 'Absorbs the next 120 damage you would take.', stack: 5, slot: 3, effect: { shield: 120 } },
     { id: 'lure', name: 'Fortune Lure', icon: 'star', price: 6, cur: 'gems', cat: 'consumable',
-      desc: 'Doubles coins dropped for the next 3 minutes.', stack: 5, effect: { luckBoost: 180 } },
+      desc: 'Doubles every coin drop for three minutes.', stack: 5, slot: 4, effect: { luckBoost: 180 } },
+    { id: 'key', name: 'Rift Key', icon: 'key', price: 320, cur: 'coins', cat: 'consumable',
+      desc: 'Opens one sealed dungeon stair. Added to your keys straight away.',
+      stack: 9, instant: true, effect: { key: 1 } },
     { id: 'chest_wood', name: 'Wooden Cache', icon: 'chest', price: 500, cur: 'coins', cat: 'chest',
       desc: 'One random Common or Rare skin, plus coins.', chest: { pool: ['common', 'rare'], w: [72, 28] } },
     { id: 'chest_iron', name: 'Iron Cache', icon: 'chest', price: 1800, cur: 'coins', cat: 'chest',
@@ -450,6 +455,18 @@
     { id: 'exchange', name: 'Gem Exchange', icon: 'gem', price: 2500, cur: 'coins', cat: 'exchange',
       desc: 'Trade 2500 coins for 5 gems.', repeat: 999, scale: 1.05, effect: { gems: 5 } }
   ];
+
+  Data.shopItem = function (id) {
+    for (var i = 0; i < Data.SHOP.length; i++) if (Data.SHOP[i].id === id) return Data.SHOP[i];
+    return null;
+  };
+  /* the consumables that get a quick-bar slot, in slot order */
+  Data.HOTBAR = (function () {
+    var out = [];
+    for (var i = 0; i < Data.SHOP.length; i++) if (Data.SHOP[i].slot) out.push(Data.SHOP[i]);
+    out.sort(function (a, b) { return a.slot - b.slot; });
+    return out;
+  })();
 
   /* ----------------------------------------------------------- quests */
   Data.QUESTS = [
@@ -496,7 +513,7 @@
     { id: 'a_level25', name: 'Seasoned', desc: 'Reach level 25', icon: 'star', stat: 'level', target: 25, reward: { coins: 4000, gems: 12 } },
     { id: 'a_level50', name: 'Regen Prime', desc: 'Reach level 50', icon: 'trophy', stat: 'level', target: 50, reward: { coins: 20000, gems: 50 } },
     { id: 'a_disc25', name: 'Wanderer', desc: 'Discover 25 landmarks', icon: 'map', stat: 'discovered', target: 25, reward: { coins: 1500, gems: 5 } },
-    { id: 'a_boss4', name: 'World Restored', desc: 'Defeat all four world bosses', icon: 'trophy', stat: 'bossesKilled', target: 4, reward: { coins: 25000, gems: 80 } },
+    { id: 'a_boss4', name: 'World Restored', desc: 'Defeat all four world bosses', icon: 'trophy', stat: 'worldBosses', target: 4, reward: { coins: 25000, gems: 80 } },
     { id: 'a_mini50k', name: 'High Roller', desc: 'Score 50,000 total in mini-games', icon: 'bolt', stat: 'miniScore', target: 50000, reward: { coins: 3000, gems: 10 } }
   ];
 

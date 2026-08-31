@@ -218,7 +218,53 @@
 
     hud.combo = el('div', 'combo hidden', '');
     h.appendChild(hud.combo);
+
+    /* quick bar: the consumables the player is carrying, usable by number
+     * key or by tapping the slot */
+    hud.hotbar = el('div', 'hotbar');
+    h.appendChild(hud.hotbar);
+    hud.slots = {};
+    for (var i = 0; i < Data.HOTBAR.length; i++) {
+      (function (item) {
+        var slot = el('button', 'hslot');
+        slot.type = 'button';
+        slot.appendChild(iconImg(item.icon, 30));
+        var count = el('span', 'hcount', '0');
+        slot.appendChild(count);
+        slot.appendChild(el('span', 'hkey', String(item.slot)));
+        slot.title = item.name;
+        on(slot, 'click', function (e) {
+          e.preventDefault();
+          g.useItem(item.id);
+        });
+        slot._count = count;
+        hud.slots[item.id] = slot;
+        hud.hotbar.appendChild(slot);
+      })(Data.HOTBAR[i]);
+    }
+
+    hud.boost = el('div', 'boost hidden');
+    hud.boost.appendChild(iconImg('star', 18));
+    hud.boostText = el('span', '', '');
+    hud.boost.appendChild(hud.boostText);
+    h.appendChild(hud.boost);
   }
+
+  /* Called whenever the bag changes, so the bar never lies about what the
+   * player is carrying. */
+  UI.refreshHotbar = function () {
+    if (!hud.slots || !g) return;
+    var any = false;
+    for (var i = 0; i < Data.HOTBAR.length; i++) {
+      var item = Data.HOTBAR[i];
+      var n = g.save.inventory[item.id] || 0;
+      var slot = hud.slots[item.id];
+      slot.classList.toggle('empty', n <= 0);
+      if (slot._count.textContent !== String(n)) slot._count.textContent = String(n);
+      if (n > 0) any = true;
+    }
+    hud.hotbar.classList.toggle('hidden', !any);
+  };
 
   /* ---------------------------------------------------- touch controls */
   function buildTouch() {
@@ -293,8 +339,11 @@
       hud.bossWrap.classList.remove('hidden');
       if (lastHud.boss !== boss.def.name) { hud.bossName.textContent = boss.def.name; lastHud.boss = boss.def.name; }
       hud.bossBar.style.width = (M.clamp01(boss.hp / boss.maxHp) * 100).toFixed(1) + '%';
+      /* pushes the toasts below the boss bar; they share the top-centre slot */
+      document.body.classList.add('boss-active');
     } else if (!hud.bossWrap.classList.contains('hidden')) {
       hud.bossWrap.classList.add('hidden'); lastHud.boss = null;
+      document.body.classList.remove('boss-active');
     }
 
     /* interaction prompt */
@@ -345,6 +394,24 @@
 
     if (s.settings.minimap) { hud.miniWrap.classList.remove('hidden'); drawMinimap(); }
     else hud.miniWrap.classList.add('hidden');
+
+    /* quick bar + fortune timer */
+    var invKey = '';
+    for (var hi = 0; hi < Data.HOTBAR.length; hi++) {
+      invKey += (s.inventory[Data.HOTBAR[hi].id] || 0) + ',';
+    }
+    if (lastHud.inv !== invKey) { lastHud.inv = invKey; UI.refreshHotbar(); }
+    for (var hj = 0; hj < Data.HOTBAR.length; hj++) {
+      var hitem = Data.HOTBAR[hj];
+      hud.slots[hitem.id].classList.toggle('ready', g.canUseItem(hitem.id));
+    }
+    if (g.luckBoostT > 0) {
+      hud.boost.classList.remove('hidden');
+      var bt = 'Double coins  ' + RG.time(g.luckBoostT);
+      if (lastHud.boost !== bt) { hud.boostText.textContent = bt; lastHud.boost = bt; }
+    } else if (!hud.boost.classList.contains('hidden')) {
+      hud.boost.classList.add('hidden');
+    }
   };
 
   function positionStick(node, st) {
@@ -571,6 +638,11 @@
   }
   UI.refreshWallets = refreshWallets;
 
+  UI.openStore = function (tab) {
+    if (tab) storeTab = tab;
+    UI.open('store');
+  };
+
   UI.refresh_store = function () {
     var s = screens.store, list = s._list;
     refreshWallets();
@@ -590,7 +662,19 @@
       info.appendChild(el('div', 'si-desc', it.desc));
       if (it.cat === 'consumable') {
         var have = sv.inventory[it.id] || 0;
-        info.appendChild(el('div', 'si-meta', 'Carrying ' + have + ' / ' + it.stack));
+        if (it.instant) {
+          info.appendChild(el('div', 'si-meta', 'You hold ' + sv.keys + ' Rift Key' + (sv.keys === 1 ? '' : 's')));
+        } else {
+          var meta = el('div', 'si-meta', 'Carrying ' + have + ' / ' + it.stack);
+          info.appendChild(meta);
+          if (have > 0) {
+            (function (item) {
+              var useBtn = btn('Use now', 'small', function () { g.useItem(item.id); });
+              useBtn.classList.add('use-btn');
+              info.appendChild(useBtn);
+            })(it);
+          }
+        }
       } else if (it.repeat) {
         info.appendChild(el('div', 'si-meta', 'Owned ' + bought + (it.repeat < 900 ? ' / ' + it.repeat : '')));
       }
@@ -1078,7 +1162,11 @@
     s._revive.disabled = g.save.gems < 10;
     s._revive.classList.toggle('disabled', g.save.gems < 10);
     clear(s._sum);
-    var rows = [['Run kills', g.runStats.kills], ['Run coins', RG.fmt(g.runStats.coins)], ['Depth', g.world.def.kind === 'dungeon' ? 'Floor ' + g.world.floor : g.world.def.name]];
+    var rows = g.arena
+      ? [['Wave reached', g.arena.wave], ['Arena score', RG.fmt(g.arena.score || 0)],
+         ['Best', RG.fmt(g.save.best.arena || 0)], ['Kills', g.arena.kills]]
+      : [['Run kills', g.runStats.kills], ['Run coins', RG.fmt(g.runStats.coins)],
+         ['Depth', g.world.def.kind === 'dungeon' ? 'Floor ' + g.world.floor : g.world.def.name]];
     for (var i = 0; i < rows.length; i++) {
       var c = el('div', 'stat');
       c.appendChild(el('div', 'sv', '' + rows[i][1]));

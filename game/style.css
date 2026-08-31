@@ -181,7 +181,7 @@ html, body {
 
 .bossbar {
   position: absolute;
-  bottom: calc(18px + var(--safe-b));
+  top: calc(96px + var(--safe-t));
   left: 50%; transform: translateX(-50%);
   width: min(58vw, 520px);
   display: flex; flex-direction: column; gap: 5px; align-items: center;
@@ -228,6 +228,20 @@ html, body {
 }
 
 .hidden { display: none !important; }
+
+/* The arcade cabinets render a complete screen of their own, so everything
+   that describes the overworld is hidden while one is running. The wallet and
+   the menu button stay: the player still needs a way out. */
+body.minigame .hud-topleft,
+body.minigame .world-label,
+body.minigame .objective,
+body.minigame .minimap,
+body.minigame .bossbar,
+body.minigame .prompt,
+body.minigame .combo,
+body.minigame .hotbar,
+body.minigame .boost,
+body.minigame .hud-topright .chip { display: none !important; }
 
 /* ------------------------------------------------------- touch controls */
 #touchControls { position: absolute; inset: 0; z-index: 6; pointer-events: none; display: none; }
@@ -606,8 +620,9 @@ h3.sec { margin: 22px 0 10px; font-size: 14px; letter-spacing: 0.1em; text-trans
   position: absolute;
   top: calc(96px + var(--safe-t));
   left: 50%; transform: translateX(-50%);
-  /* below #screens so a menu is never covered by gameplay chatter */
-  z-index: 15;
+  /* Above #screens (20) and .dialog (30): purchase feedback is worthless if
+     the panel the player just clicked in covers it. */
+  z-index: 40;
   display: flex; flex-direction: column; gap: 7px; align-items: center;
   pointer-events: none;
   width: min(92vw, 460px);
@@ -631,6 +646,70 @@ h3.sec { margin: 22px 0 10px; font-size: 14px; letter-spacing: 0.1em; text-trans
 .toast.out { animation: toastOut 0.4s ease forwards; }
 @keyframes toastIn { from { opacity: 0; transform: translateY(-12px) scale(0.95); } to { opacity: 1; transform: none; } }
 @keyframes toastOut { to { opacity: 0; transform: translateY(-10px) scale(0.97); } }
+
+/* while a panel is open the toasts move to the foot of the screen, so they
+   sit clear of the panel header the player is reading */
+body.modal #toasts { top: auto; bottom: calc(16px + var(--safe-b)); }
+/* the boss bar owns the top-centre slot while a boss is alive */
+body.boss-active #toasts { top: calc(152px + var(--safe-t)); }
+body.modal.boss-active #toasts { top: auto; bottom: calc(16px + var(--safe-b)); }
+
+/* ------------------------------------------------------------- quick bar */
+.hotbar {
+  position: absolute;
+  bottom: calc(14px + var(--safe-b));
+  left: 50%; transform: translateX(-50%);
+  display: flex; gap: 9px;
+  pointer-events: none;
+}
+.hotbar .hslot { pointer-events: auto; }
+.hslot {
+  position: relative;
+  width: 54px; height: 54px;
+  display: grid; place-items: center;
+  padding: 0;
+  background: rgba(10, 15, 28, 0.78);
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.42);
+  cursor: pointer;
+  transition: transform 0.08s ease, border-color 0.16s ease, opacity 0.16s ease;
+}
+.hslot:active { transform: scale(0.93); }
+.hslot.empty { display: none; }
+.hslot.ready { border-color: rgba(127, 255, 212, 0.65); box-shadow: 0 0 14px rgba(127,255,212,0.22), 0 4px 16px rgba(0,0,0,0.42); }
+.hslot:not(.ready) .icn { opacity: 0.45; }
+.hcount {
+  position: absolute; right: 4px; bottom: 2px;
+  font-size: 12px; font-weight: 800;
+  color: var(--text);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.95);
+  font-variant-numeric: tabular-nums;
+}
+.hkey {
+  position: absolute; left: 5px; top: 2px;
+  font-size: 10px; font-weight: 800;
+  color: var(--dim);
+}
+body.touch-on .hkey { display: none; }
+
+.boost {
+  position: absolute;
+  bottom: calc(78px + var(--safe-b));
+  left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 12px;
+  background: rgba(10, 15, 28, 0.78);
+  border: 1px solid rgba(245, 197, 66, 0.45);
+  border-radius: 999px;
+  font-size: 12px; font-weight: 700;
+  color: var(--gold);
+  backdrop-filter: blur(6px);
+  white-space: nowrap;
+}
+
+.use-btn { margin-top: 7px; }
 
 /* --------------------------------------------------------------- splash */
 #splash {
@@ -700,6 +779,9 @@ h3.sec { margin: 22px 0 10px; font-size: 14px; letter-spacing: 0.1em; text-trans
   .hud-topleft { width: min(46vw, 220px); }
   .minimap { width: 92px; height: 92px; }
   .bossbar { width: min(76vw, 420px); }
+  .hslot { width: 46px; height: 46px; border-radius: 11px; }
+  .hotbar { gap: 7px; bottom: calc(10px + var(--safe-b)); }
+  .boost { bottom: calc(64px + var(--safe-b)); }
   .combo { font-size: 24px; }
   .shop-item, .mini-card, .world-card { padding: 10px 11px; gap: 10px; }
   .si-name, .mc-name, .wc-name { font-size: 14px; }

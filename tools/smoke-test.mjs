@@ -264,6 +264,231 @@ async function run() {
     if (econ.dupes) problems.push(`[${sc.name}] duplicate skins in the owned list`);
     if (!(econ.hp > 0) || !(econ.dmg > 0)) problems.push(`[${sc.name}] derived player stats are invalid: ${JSON.stringify(econ)}`);
 
+    /* --- consumables: the reported bug. Buying a potion has to do something. --- */
+    const items = await page.evaluate(() => {
+      const g = window.RG.game;
+      const out = { steps: [] };
+      RG.UI.closeAll();
+      g.save.coins = 500000; g.save.gems = 900;
+      g.save.inventory = {};
+      g.player.recompute(g);
+      g.player.hp = g.player.maxHp;
+      g.player.shield = 0;
+      g.luckBoostT = 0;
+
+      const potion = RG.Data.shopItem('potion_s');
+
+      // 1. hurt player + buy potion -> healed immediately, nothing left in the bag
+      g.player.hp = g.player.maxHp - 40;
+      const hp0 = g.player.hp;
+      g.buy(potion, potion.price);
+      out.steps.push({ name: 'buy while hurt heals now',
+        ok: g.player.hp > hp0 && (g.save.inventory.potion_s || 0) === 0,
+        hp0, hp1: g.player.hp, bag: g.save.inventory.potion_s || 0 });
+
+      // 2. buy at full health -> stored, not silently lost
+      g.player.hp = g.player.maxHp;
+      g.buy(potion, potion.price);
+      out.steps.push({ name: 'buy at full health stores it',
+        ok: (g.save.inventory.potion_s || 0) === 1, bag: g.save.inventory.potion_s || 0 });
+
+      // 3. the stored potion is usable later
+      g.player.hp = g.player.maxHp - 30;
+      const used = g.useItem('potion_s');
+      out.steps.push({ name: 'stored potion is usable',
+        ok: used === true && (g.save.inventory.potion_s || 0) === 0 && g.player.hp > g.player.maxHp - 30 });
+
+      // 4. using an item you do not have fails cleanly
+      const none = g.useItem('potion_s');
+      out.steps.push({ name: 'using an empty slot is refused',
+        ok: none === false && (g.save.inventory.potion_s || 0) === 0 });
+
+      // 5. ward grants a shield
+      g.player.shield = 0;
+      const ward = RG.Data.shopItem('ward');
+      g.buy(ward, ward.price);
+      out.steps.push({ name: 'ward grants a shield', ok: g.player.shield >= 120, shield: g.player.shield });
+
+      // 6. lure starts the coin boost
+      const lure = RG.Data.shopItem('lure');
+      g.buy(lure, lure.price);
+      out.steps.push({ name: 'lure starts the coin boost', ok: g.luckBoostT > 100, t: g.luckBoostT });
+
+      // 7. a rift key lands in the key count and never in the bag
+      const keys0 = g.save.keys;
+      const key = RG.Data.shopItem('key');
+      g.buy(key, key.price);
+      out.steps.push({ name: 'rift key is added straight away',
+        ok: g.save.keys === keys0 + 1 && !(g.save.inventory.key > 0) });
+
+      // 8. a purchase that cannot be afforded changes nothing at all
+      g.save.coins = 5;
+      const snapshot = JSON.stringify({ c: g.save.coins, p: g.save.purchases, i: g.save.inventory });
+      const bought = g.buy(potion, potion.price);
+      out.steps.push({ name: 'unaffordable purchase is a clean no-op',
+        ok: bought === false &&
+            snapshot === JSON.stringify({ c: g.save.coins, p: g.save.purchases, i: g.save.inventory }) });
+
+      // 9. a full bag is refused without taking the money
+      g.save.coins = 500000;
+      g.save.inventory.potion_s = potion.stack;
+      g.player.hp = g.player.maxHp;
+      const coinsBefore = g.save.coins;
+      const overfilled = g.buy(potion, potion.price);
+      out.steps.push({ name: 'a full bag is refused without charging',
+        ok: overfilled === false && g.save.coins === coinsBefore &&
+            g.save.inventory.potion_s === potion.stack });
+
+      // 10. every consumable in the shop declares an effect the game applies
+      const unhandled = RG.Data.SHOP.filter(it => it.cat === 'consumable').filter(it => {
+        const e = it.effect || {};
+        return !(e.heal || e.shield || e.luckBoost || e.key);
+      }).map(it => it.id);
+      out.steps.push({ name: 'no consumable has an effect the game ignores', ok: unhandled.length === 0, unhandled });
+
+      g.save.inventory = {};
+      RG.UI.closeAll();
+      return out;
+    });
+    for (const st of items.steps) {
+      if (!st.ok) problems.push(`[${sc.name}] consumables: ${st.name} -> ${JSON.stringify(st)}`);
+    }
+
+    /* --- purchase feedback must be visible while the store is open --- */
+    const toastVisible = await page.evaluate(() => {
+      RG.UI.openStore('consumable');
+      RG.UI.toast('test message', 'good');
+      const host = document.getElementById('toasts');
+      const toast = host.lastElementChild;
+      const hz = parseInt(getComputedStyle(host).zIndex, 10);
+      /* the panels stack inside #screens, so that is the layer to beat */
+      const sz = parseInt(getComputedStyle(document.getElementById('screens')).zIndex, 10);
+      const r = toast.getBoundingClientRect();
+      /* #toasts is pointer-events:none, and elementFromPoint skips those, so
+         turn it on just for the hit test */
+      const prev = host.style.pointerEvents;
+      host.style.pointerEvents = 'auto';
+      const onTop = document.elementFromPoint(
+        Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2));
+      host.style.pointerEvents = prev;
+      const res = {
+        above: hz > sz, hz, sz,
+        visible: r.width > 0 && r.height > 0 &&
+                 r.top >= 0 && r.bottom <= window.innerHeight,
+        hitTestReachesToast: !!(onTop && (onTop === toast || toast.contains(onTop)))
+      };
+      RG.UI.closeAll();
+      return res;
+    });
+    if (!toastVisible.above || !toastVisible.visible || !toastVisible.hitTestReachesToast) {
+      problems.push(`[${sc.name}] purchase feedback is hidden behind the menu: ${JSON.stringify(toastVisible)}`);
+    }
+
+    /* --- a boost must not tick away behind a menu --- */
+    const boostPaused = await page.evaluate(() => {
+      const g = window.RG.game;
+      RG.UI.closeAll();
+      g.luckBoostT = 100;
+      RG.UI.open('store');
+      for (let i = 0; i < 120; i++) g.step(1 / 60);
+      const whileOpen = g.luckBoostT;
+      RG.UI.closeAll();
+      RG.Input.block(0);
+      for (let i = 0; i < 120; i++) g.step(1 / 60);
+      const whilePlaying = g.luckBoostT;
+      g.luckBoostT = 0;
+      return { whileOpen, whilePlaying };
+    });
+    if (boostPaused.whileOpen !== 100 || !(boostPaused.whilePlaying < 99.5)) {
+      problems.push(`[${sc.name}] the coin boost timer misbehaves: ${JSON.stringify(boostPaused)}`);
+    }
+
+    /* --- leaving the arena any way at all must bank the run --- */
+    const arenaBank = await page.evaluate(async () => {
+      const g = window.RG.game;
+      RG.UI.closeAll();
+      g.save.best.arena = 0;
+      g.startArena();
+      await new Promise(r => setTimeout(r, 700));
+      g.arena.wave = 6;
+      g.arena.kills = 40;
+      g.travelTo('hub');
+      await new Promise(r => setTimeout(r, 700));
+      RG.UI.closeAll();
+      return { best: g.save.best.arena, arenaCleared: g.arena === null, world: g.world.id };
+    });
+    if (!(arenaBank.best > 0) || !arenaBank.arenaCleared) {
+      problems.push(`[${sc.name}] the arena run was discarded on exit: ${JSON.stringify(arenaBank)}`);
+    }
+
+    /* --- toasts must not paint over the boss health bar --- */
+    const bossToast = await page.evaluate(async () => {
+      const g = window.RG.game;
+      RG.UI.closeAll();
+      g.clearEntities();
+      const boss = RG.spawnEnemy(g, 'boss_warden', g.player.x + 200, g.player.y, 1);
+      boss.spawnT = 0;
+      for (let i = 0; i < 5; i++) g.step(1 / 60);
+      g.render();
+      RG.UI.toast('a message during the fight', 'warn');
+      await new Promise(r => requestAnimationFrame(r));
+      const bar = document.querySelector('.bossbar').getBoundingClientRect();
+      const toast = document.getElementById('toasts').lastElementChild.getBoundingClientRect();
+      const overlap = !(toast.bottom <= bar.top || toast.top >= bar.bottom ||
+                        toast.right <= bar.left || toast.left >= bar.right);
+      g.clearEntities();
+      g.render();
+      return { overlap, bar: Math.round(bar.bottom), toast: Math.round(toast.top),
+               flagged: document.body.classList.contains('boss-active') };
+    });
+    if (bossToast.overlap) {
+      problems.push(`[${sc.name}] toasts cover the boss bar: ${JSON.stringify(bossToast)}`);
+    }
+
+    /* --- a boss you walk away from must stay challengeable --- */
+    const bossRetry = await page.evaluate(() => {
+      const g = window.RG.game;
+      RG.UI.closeAll();
+      g.travelTo('verdant');
+      return new Promise(res => setTimeout(() => {
+        const boss = g.world.structures.find(s => s.kind === 'boss');
+        if (!boss) return res({ ok: true, skipped: true });
+        boss.used = 'fighting';
+        g.clearEntities();
+        res({ ok: boss.used === false, state: boss.used });
+      }, 900));
+    });
+    if (!bossRetry.ok) problems.push(`[${sc.name}] a fled boss stays locked out: ${JSON.stringify(bossRetry)}`);
+
+    /* --- looted chests must stay looted after the world is regenerated --- */
+    const persist = await page.evaluate(() => {
+      const g = window.RG.game;
+      const chest = g.world.structures.find(s => s.kind === 'chest' && !s.used);
+      if (!chest) return { ok: true, skipped: true };
+      const sid = chest.sid;
+      g.openChest(chest);
+      delete g.worldCache[g.world.id];
+      const fresh = g.getWorld('verdant');
+      const same = fresh.structures[sid];
+      return { ok: !!(same && same.used), sid, used: same && same.used };
+    });
+    if (!persist.ok) problems.push(`[${sc.name}] looted chests refill after a restart: ${JSON.stringify(persist)}`);
+
+    /* --- the particle pool must never lose or alias an object --- */
+    const pool = await page.evaluate(() => {
+      const P = RG.Particles;
+      P.clear();
+      for (let i = 0; i < P.budget * 3; i++) {
+        P.spawn(Math.random() * 100, Math.random() * 100, 0, 0, 1 + Math.random(), 2, '#fff', 0, {});
+      }
+      const unique = new Set(P.list).size;
+      P.clear();
+      return { unique, total: P.list.length };
+    });
+    if (pool.unique !== pool.total) {
+      problems.push(`[${sc.name}] particle pool corrupted: ${pool.unique} distinct objects of ${pool.total}`);
+    }
+
     /* --- every skin equips and draws --- */
     const skinCheck = await page.evaluate(() => {
       const g = window.RG.game;
@@ -303,6 +528,31 @@ async function run() {
       return bad;
     });
     if (foeCheck.length) problems.push(`[${sc.name}] enemies failed: ${foeCheck.join(', ')}`);
+
+    /* --- the world HUD must not sit on top of an arcade cabinet --- */
+    const hudDuringMinigame = await page.evaluate(async () => {
+      const g = window.RG.game;
+      RG.UI.closeAll();
+      g.startMinigame('match');
+      for (let i = 0; i < 30; i++) g.step(1 / 60);
+      g.render();
+      const shown = [];
+      for (const sel of ['.hud-topleft', '.minimap', '.world-label', '.objective', '.hotbar', '.boost', '.hud-topright .chip']) {
+        const el = document.querySelector(sel);
+        if (!el) continue;
+        const st = getComputedStyle(el);
+        const r = el.getBoundingClientRect();
+        if (st.display !== 'none' && r.width > 0 && r.height > 0) shown.push(sel);
+      }
+      const cls = document.body.classList.contains('minigame');
+      g.endMinigame('match', 0);
+      RG.UI.closeAll();
+      const cleared = !document.body.classList.contains('minigame');
+      return { shown, cls, cleared };
+    });
+    if (hudDuringMinigame.shown.length || !hudDuringMinigame.cls || !hudDuringMinigame.cleared) {
+      problems.push(`[${sc.name}] world HUD overlaps a mini-game: ${JSON.stringify(hudDuringMinigame)}`);
+    }
 
     /* --- mini-games --- */
     for (const id of ['pulse', 'match', 'angler']) {

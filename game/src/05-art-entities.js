@@ -1105,7 +1105,16 @@
     spriteCache[key] = { frames: [cv], w: size, h: size, ox: size * 0.5, oy: size * 0.5 };
     return cv;
   };
+  /* toDataURL re-encodes a PNG every call, and the UI asks for the same
+   * handful of icons over and over, so the strings are cached too. */
+  var iconUrlCache = {};
   Art.iconURL = function (name, size) {
-    try { return Art.icon(name, size || 32).toDataURL(); } catch (e) { return ''; }
+    size = size || 32;
+    var key = name + ':' + size;
+    if (iconUrlCache[key] !== undefined) return iconUrlCache[key];
+    var url = '';
+    try { url = Art.icon(name, size).toDataURL(); } catch (e) { url = ''; }
+    iconUrlCache[key] = url;
+    return url;
   };
 })(RG);
